@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Detection — object detection &amp; tracking</title>
+<meta name="description" content="Real-time object detection and tracking in the browser using TensorFlow.js coco-ssd and an IoU-based tracker.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14181C;
+    --panel:#1C2126;
+    --panel-2:#21262C;
+    --ink:#E7ECEF;
+    --ink-soft:#8B98A3;
+    --ink-faint:#586470;
+    --accent:#6FE3D0;
+    --accent-soft:rgba(111,227,208,0.14);
+    --accent-ink:#0B1F1B;
+    --border:rgba(231,236,239,0.10);
+    --error:#E8836A;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 50% 0%, #1A2024, transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'JetBrains Mono',monospace;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:40px 16px;
+  }
+
+  .app{
+    width:100%;
+    max-width:760px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  .masthead{padding:0 2px;}
+
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin:0 0 10px;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+
+  .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--accent);
+  }
+
+  .dot.is-live{animation:pulse 1.6s ease-in-out infinite;}
+
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 var(--accent-soft);}
+    50%{box-shadow:0 0 0 6px transparent;}
+  }
+
+  .masthead h1{
+    margin:0 0 6px;
+    font-family:'Archivo',sans-serif;
+    font-weight:800;
+    font-size:clamp(22px,4vw,28px);
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+
+  .masthead p{
+    margin:0;
+    font-size:13px;
+    line-height:1.55;
+    color:var(--ink-soft);
+    max-width:58ch;
+  }
+
+  .viewfinder{
+    position:relative;
+    background:#0B0E11;
+    border-radius:14px;
+    overflow:hidden;
+    aspect-ratio:4/3;
+    border:1px solid var(--border);
+  }
+
+  video{display:none;}
+
+  canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    object-fit:contain;
+    background:#0B0E11;
+  }
+
+  .corner{
+    position:absolute;
+    width:22px;height:22px;
+    border-color:var(--accent);
+    opacity:0.85;
+    pointer-events:none;
+  }
+  .corner--tl{top:12px;left:12px;border-top:2px solid;border-left:2px solid;}
+  .corner--tr{top:12px;right:12px;border-top:2px solid;border-right:2px solid;}
+  .corner--bl{bottom:12px;left:12px;border-bottom:2px solid;border-left:2px solid;}
+  .corner--br{bottom:12px;right:12px;border-bottom:2px solid;border-right:2px solid;}
+
+  .status-overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:24px;
+    background:rgba(11,14,17,0.55);
+    backdrop-filter:blur(2px);
+  }
+
+  .status-overlay.is-hidden{display:none;}
+
+  .status-text{
+    font-size:13px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    max-width:42ch;
+  }
+
+  .status-text.is-error{color:var(--error);}
+
+  .controls{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    padding:14px 16px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+  }
+
+  .btn{
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--ink);
+    font-family:'JetBrains Mono',monospace;
+    font-weight:500;
+    font-size:12.5px;
+    padding:9px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:background 0.15s ease,border-color 0.15s ease;
+  }
+
+  .btn:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .btn--primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;}
+  .btn--primary:hover:not(:disabled){background:#7FEADA;}
+
+  input[type="file"]{display:none;}
+
+  .stats{
+    display:flex;
+    gap:16px;
+    margin-left:auto;
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+
+  .stats strong{color:var(--ink);font-weight:600;}
+
+  .footnote{
+    text-align:center;
+    font-size:11px;
+    color:var(--ink-faint);
+    padding:0 4px;
+    line-height:1.6;
+  }
+
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  @media (max-width:480px){
+    .stats{margin-left:0;width:100%;justify-content:space-between;}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:0.001ms !important;animation-iteration-count:1 !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="masthead">
+    <span class="eyebrow"><span class="dot" id="liveDot"></span>Object detection &amp; tracking</span>
+    <h1>Live detection</h1>
+    <p>Runs entirely in this browser tab — TensorFlow.js coco-ssd for detection, a custom IoU tracker for the persistent IDs. No server, no upload of your video anywhere.</p>
+  </header>
+
+  <div class="viewfinder">
+    <video id="video" muted playsinline></video>
+    <canvas id="canvas"></canvas>
+    <span class="corner corner--tl"></span>
+    <span class="corner corner--tr"></span>
+    <span class="corner corner--bl"></span>
+    <span class="corner corner--br"></span>
+    <div class="status-overlay" id="statusOverlay">
+      <p class="status-text" id="statusText">Loading detection model…</p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn--primary" id="webcamBtn" disabled>Use webcam</button>
+    <button class="btn" id="uploadBtn" disabled>Upload video</button>
+    <input type="file" id="fileInput" accept="video/*">
+    <button class="btn" id="stopBtn" disabled>Stop</button>
+    <div class="stats">
+      <span>objects: <strong id="statObjects">0</strong></span>
+      <span>fps: <strong id="statFps">0</strong></span>
+    </div>
+  </div>
+
+  <p class="footnote">Webcam access needs a secure context (HTTPS, or localhost) — it won't work opened directly as a local file in most browsers. Video upload works anywhere, no permissions needed.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script>
+/* ---------- IoU-based multi-object tracker ----------
+   A lightweight, from-scratch take on SORT's core idea: match each new
+   detection to the closest existing track by bounding-box overlap (IoU),
+   keep that track's ID, age out tracks that go unmatched too long, and
+   spin up a new ID for anything that doesn't match an existing track. */
+function iou(boxA, boxB){
+  const [ax, ay, aw, ah] = boxA;
+  const [bx, by, bw, bh] = boxB;
+  const x1 = Math.max(ax, bx);
+  const y1 = Math.max(ay, by);
+  const x2 = Math.min(ax + aw, bx + bw);
+  const y2 = Math.min(ay + ah, by + bh);
+  const interW = Math.max(0, x2 - x1);
+  const interH = Math.max(0, y2 - y1);
+  const interArea = interW * interH;
+  const unionArea = aw * ah + bw * bh - interArea;
+  return unionArea <= 0 ? 0 : interArea / unionArea;
+}
+
+class CentroidIouTracker{
+  constructor({ iouThreshold = 0.3, maxMissed = 15 } = {}){
+    this.tracks = [];
+    this.nextId = 1;
+    this.iouThreshold = iouThreshold;
+    this.maxMissed = maxMissed;
+  }
+
+  update(detections){
+    const matchedTrackIdx = new Set();
+    const matchedDetIdx = new Set();
+
+    const pairs = [];
+    this.tracks.forEach((track, ti) => {
+      detections.forEach((det, di) => {
+        if (track.class === det.class){
+          const score = iou(track.bbox, det.bbox);
+          if (score > this.iouThreshold) pairs.push({ ti, di, score });
+        }
+      });
+    });
+    pairs.sort((a, b) => b.score - a.score);
+
+    pairs.forEach(p => {
+      if (!matchedTrackIdx.has(p.ti) && !matchedDetIdx.has(p.di)){
+        matchedTrackIdx.add(p.ti);
+        matchedDetIdx.add(p.di);
+        const track = this.tracks[p.ti];
+        const det = detections[p.di];
+        track.bbox = det.bbox;
+        track.score = det.score;
+        track.missed = 0;
+      }
+    });
+
+    this.tracks.forEach((track, ti) => {
+      if (!matchedTrackIdx.has(ti)) track.missed++;
+    });
+
+    this.tracks = this.tracks.filter(t => t.missed <= this.maxMissed);
+
+    detections.forEach((det, di) => {
+      if (!matchedDetIdx.has(di)){
+        this.tracks.push({ id: this.nextId++, bbox: det.bbox, class: det.class, score: det.score, missed: 0 });
+      }
+    });
+
+    return this.tracks.filter(t => t.missed === 0);
+  }
+}
+
+/* ---------- Wiring ---------- */
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusOverlay = document.getElementById('statusOverlay');
+const statusText = document.getElementById('statusText');
+const webcamBtn = document.getElementById('webcamBtn');
+const uploadBtn = document.getElementById('uploadBtn');
+const fileInput = document.getElementById('fileInput');
+const stopBtn = document.getElementById('stopBtn');
+const liveDot = document.getElementById('liveDot');
+const statObjects = document.getElementById('statObjects');
+const statFps = document.getElementById('statFps');
+
+const SCORE_THRESHOLD = 0.5;
+const PALETTE = ['#6FE3D0', '#E8836A', '#E0C25E', '#A78BE8', '#7AC9E8', '#E89BC4'];
+
+let model = null;
+let tracker = new CentroidIouTracker();
+let running = false;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+
+function setStatus(text, isError){
+  statusText.textContent = text;
+  statusText.classList.toggle('is-error', !!isError);
+  statusOverlay.classList.remove('is-hidden');
+}
+
+function hideStatus(){
+  statusOverlay.classList.add('is-hidden');
+}
+
+function stopCurrentSource(){
+  running = false;
+  liveDot.classList.remove('is-live');
+  if (video.srcObject){
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+  video.removeAttribute('src');
+  video.load();
+  stopBtn.disabled = true;
+}
+
+function onSourceReady(){
+  video.addEventListener('loadedmetadata', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }, { once: true });
+  tracker = new CentroidIouTracker();
+  running = true;
+  liveDot.classList.add('is-live');
+  stopBtn.disabled = false;
+  hideStatus();
+  detectLoop();
+}
+
+async function startWebcam(){
+  stopCurrentSource();
+  setStatus('Requesting camera access…');
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+    onSourceReady();
+  }catch(err){
+    setStatus(`Camera access failed (${err.message}). Try "Upload video" instead, or serve this page over HTTPS / localhost.`, true);
+  }
+}
+
+function startFileSource(file){
+  stopCurrentSource();
+  const url = URL.createObjectURL(file);
+  video.src = url;
+  video.loop = true;
+  video.play();
+  onSourceReady();
+}
+
+function draw(tracks){
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  tracks.forEach(t => {
+    const [x, y, w, h] = t.bbox;
+    const color = PALETTE[t.id % PALETTE.length];
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, canvas.width / 320);
+    ctx.strokeRect(x, y, w, h);
+
+    const label = `#${t.id} ${t.class} ${Math.round(t.score * 100)}%`;
+    const fontSize = Math.max(12, Math.round(canvas.width / 70));
+    ctx.font = `600 ${fontSize}px 'JetBrains Mono', monospace`;
+    const textW = ctx.measureText(label).width;
+    const tagH = fontSize + 8;
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x, Math.max(0, y - tagH), textW + 12, tagH);
+    ctx.fillStyle = '#0B0E11';
+    ctx.fillText(label, x + 6, Math.max(fontSize, y - 6));
+  });
+}
+
+async function detectLoop(){
+  if (!running || video.paused || video.ended) return;
+  try{
+    const detections = await model.detect(video);
+    const filtered = detections.filter(d => d.score >= SCORE_THRESHOLD);
+    const tracked = tracker.update(filtered.map(d => ({ bbox: d.bbox, class: d.class, score: d.score })));
+    draw(tracked);
+
+    statObjects.textContent = tracked.length;
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsTime > 1000){
+      statFps.textContent = frameCount;
+      frameCount = 0;
+      lastFpsTime = now;
+    }
+  }catch(err){
+    // a transient frame error (e.g. video not ready yet) shouldn't kill the loop
+  }
+  if (running) requestAnimationFrame(detectLoop);
+}
+
+webcamBtn.addEventListener('click', startWebcam);
+uploadBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) startFileSource(fileInput.files[0]);
+});
+stopBtn.addEventListener('click', () => {
+  stopCurrentSource();
+  setStatus('Stopped. Choose a source to start again.');
+});
+
+(async function init(){
+  try{
+    model = await cocoSsd.load();
+    webcamBtn.disabled = false;
+    uploadBtn.disabled = false;
+    setStatus('Model loaded. Choose a video source to begin.');
+  }catch(err){
+    setStatus('Could not load the detection model. Check your internet connection and reload.', true);
+  }
+})();
+</script>
+</body>
+</html>
