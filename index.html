@@ -4,214 +4,137 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Detection — object detection &amp; tracking</title>
-<meta name="description" content="Real-time object detection and tracking in the browser using TensorFlow.js coco-ssd and an IoU-based tracker.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#14181C;
-    --panel:#1C2126;
-    --panel-2:#21262C;
-    --ink:#E7ECEF;
-    --ink-soft:#8B98A3;
-    --ink-faint:#586470;
-    --accent:#6FE3D0;
-    --accent-soft:rgba(111,227,208,0.14);
-    --accent-ink:#0B1F1B;
-    --border:rgba(231,236,239,0.10);
-    --error:#E8836A;
+    --bg:#14181C;--panel:#1C2126;--panel-2:#21262C;
+    --ink:#E7ECEF;--ink-soft:#8B98A3;--ink-faint:#586470;
+    --accent:#6FE3D0;--accent-soft:rgba(111,227,208,0.14);--accent-ink:#0B1F1B;
+    --border:rgba(231,236,239,0.10);--error:#E8836A;
   }
-
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
-
   body{
     min-height:100vh;
-    background:
-      radial-gradient(circle at 50% 0%, #1A2024, transparent 60%),
-      var(--bg);
-    color:var(--ink);
-    font-family:'JetBrains Mono',monospace;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:40px 16px;
+    background:radial-gradient(circle at 50% 0%,#1A2024,transparent 60%),var(--bg);
+    color:var(--ink);font-family:'JetBrains Mono',monospace;
+    display:flex;align-items:center;justify-content:center;padding:40px 16px;
   }
-
-  .app{
-    width:100%;
-    max-width:760px;
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-  }
-
+  .app{width:100%;max-width:760px;display:flex;flex-direction:column;gap:16px;}
   .masthead{padding:0 2px;}
-
   .eyebrow{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    margin:0 0 10px;
-    font-size:11px;
-    font-weight:600;
-    letter-spacing:0.16em;
-    text-transform:uppercase;
-    color:var(--accent);
+    display:inline-flex;align-items:center;gap:8px;margin:0 0 10px;
+    font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--accent);
   }
-
-  .dot{
-    width:7px;height:7px;border-radius:50%;
-    background:var(--accent);
-  }
-
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
   .dot.is-live{animation:pulse 1.6s ease-in-out infinite;}
-
-  @keyframes pulse{
-    0%,100%{box-shadow:0 0 0 0 var(--accent-soft);}
-    50%{box-shadow:0 0 0 6px transparent;}
-  }
-
-  .masthead h1{
-    margin:0 0 6px;
-    font-family:'Archivo',sans-serif;
-    font-weight:800;
-    font-size:clamp(22px,4vw,28px);
-    letter-spacing:-0.01em;
-    color:var(--ink);
-  }
-
-  .masthead p{
-    margin:0;
-    font-size:13px;
-    line-height:1.55;
-    color:var(--ink-soft);
-    max-width:58ch;
-  }
-
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--accent-soft);}50%{box-shadow:0 0 0 6px transparent;}}
+  .masthead h1{margin:0 0 6px;font-family:'Archivo',sans-serif;font-weight:800;font-size:clamp(22px,4vw,28px);letter-spacing:-0.01em;}
+  .masthead p{margin:0;font-size:13px;line-height:1.55;color:var(--ink-soft);max-width:58ch;}
   .viewfinder{
-    position:relative;
-    background:#0B0E11;
-    border-radius:14px;
-    overflow:hidden;
-    aspect-ratio:4/3;
-    border:1px solid var(--border);
+    position:relative;background:#0B0E11;border-radius:14px;overflow:hidden;
+    aspect-ratio:4/3;border:1px solid var(--border);
   }
-
   video{display:none;}
-
-  canvas{
-    width:100%;
-    height:100%;
-    display:block;
-    object-fit:contain;
-    background:#0B0E11;
-  }
-
-  .corner{
-    position:absolute;
-    width:22px;height:22px;
-    border-color:var(--accent);
-    opacity:0.85;
-    pointer-events:none;
-  }
+  canvas{width:100%;height:100%;display:block;background:#0B0E11;}
+  .corner{position:absolute;width:22px;height:22px;border-color:var(--accent);opacity:0.85;pointer-events:none;}
   .corner--tl{top:12px;left:12px;border-top:2px solid;border-left:2px solid;}
   .corner--tr{top:12px;right:12px;border-top:2px solid;border-right:2px solid;}
   .corner--bl{bottom:12px;left:12px;border-bottom:2px solid;border-left:2px solid;}
   .corner--br{bottom:12px;right:12px;border-bottom:2px solid;border-right:2px solid;}
-
   .status-overlay{
-    position:absolute;
-    inset:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    text-align:center;
-    padding:24px;
-    background:rgba(11,14,17,0.55);
-    backdrop-filter:blur(2px);
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:24px;background:rgba(11,14,17,0.6);backdrop-filter:blur(2px);
   }
-
   .status-overlay.is-hidden{display:none;}
-
-  .status-text{
-    font-size:13px;
-    line-height:1.6;
-    color:var(--ink-soft);
-    max-width:42ch;
-  }
-
+  .status-text{font-size:13px;line-height:1.6;color:var(--ink-soft);max-width:42ch;}
   .status-text.is-error{color:var(--error);}
 
+  /* controls row */
   .controls{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:center;
-    gap:10px;
-    padding:14px 16px;
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:12px;
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    padding:14px 16px;background:var(--panel);border:1px solid var(--border);border-radius:12px;
   }
-
   .btn{
-    border:1px solid var(--border);
-    background:var(--panel-2);
-    color:var(--ink);
-    font-family:'JetBrains Mono',monospace;
-    font-weight:500;
-    font-size:12.5px;
-    padding:9px 14px;
-    border-radius:8px;
-    cursor:pointer;
+    border:1px solid var(--border);background:var(--panel-2);color:var(--ink);
+    font-family:'JetBrains Mono',monospace;font-weight:500;font-size:12.5px;
+    padding:9px 14px;border-radius:8px;cursor:pointer;
     transition:background 0.15s ease,border-color 0.15s ease;
   }
-
   .btn:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent);}
   .btn:disabled{opacity:0.4;cursor:not-allowed;}
-
   .btn--primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;}
   .btn--primary:hover:not(:disabled){background:#7FEADA;}
-
+  .btn--active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
   input[type="file"]{display:none;}
-
-  .stats{
-    display:flex;
-    gap:16px;
-    margin-left:auto;
-    font-size:12px;
-    color:var(--ink-soft);
-  }
-
+  .stats{display:flex;gap:16px;margin-left:auto;font-size:12px;color:var(--ink-soft);}
   .stats strong{color:var(--ink);font-weight:600;}
 
-  .footnote{
-    text-align:center;
-    font-size:11px;
-    color:var(--ink-faint);
-    padding:0 4px;
-    line-height:1.6;
+  /* class filter panel */
+  .filter-panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;
   }
+  .filter-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;cursor:pointer;user-select:none;
+    border-bottom:1px solid transparent;transition:border-color 0.2s ease;
+  }
+  .filter-header.is-open{border-bottom-color:var(--border);}
+  .filter-title{font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+  .filter-title span{color:var(--accent);margin-left:6px;}
+  .filter-chevron{
+    font-size:11px;color:var(--ink-faint);transition:transform 0.2s ease;
+  }
+  .filter-header.is-open .filter-chevron{transform:rotate(180deg);}
+  .filter-body{display:none;padding:14px 16px 16px;}
+  .filter-body.is-open{display:block;}
+  .filter-tools{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;}
+  .filter-search{
+    flex:1;min-width:140px;
+    border:1px solid var(--border);background:var(--panel-2);
+    color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12px;
+    padding:7px 10px;border-radius:7px;outline:none;
+    transition:border-color 0.15s ease;
+  }
+  .filter-search:focus{border-color:var(--accent);}
+  .filter-search::placeholder{color:var(--ink-faint);}
+  .filter-quickbtn{
+    border:1px solid var(--border);background:var(--panel-2);color:var(--ink-soft);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    padding:6px 10px;border-radius:7px;cursor:pointer;
+    transition:background 0.15s ease;white-space:nowrap;
+  }
+  .filter-quickbtn:hover{background:var(--accent-soft);color:var(--accent);}
+  .class-grid{
+    display:flex;flex-wrap:wrap;gap:6px;
+    max-height:180px;overflow-y:auto;padding-right:4px;
+  }
+  .class-grid::-webkit-scrollbar{width:6px;}
+  .class-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
+  .class-chip{
+    border:1px solid var(--border);background:var(--panel-2);color:var(--ink-faint);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    padding:5px 9px;border-radius:20px;cursor:pointer;
+    transition:background 0.12s ease,border-color 0.12s ease,color 0.12s ease;
+    display:none; /* hidden until filter applied */
+  }
+  .class-chip.visible{display:inline-block;}
+  .class-chip.selected{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
 
+  .footnote{text-align:center;font-size:11px;color:var(--ink-faint);padding:0 4px;line-height:1.6;}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-
-  @media (max-width:480px){
-    .stats{margin-left:0;width:100%;justify-content:space-between;}
-  }
-
-  @media (prefers-reduced-motion: reduce){
-    *,*::before,*::after{animation-duration:0.001ms !important;animation-iteration-count:1 !important;}
-  }
+  @media (max-width:480px){.stats{margin-left:0;width:100%;justify-content:space-between;}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.001ms !important;animation-iteration-count:1 !important;}}
 </style>
 </head>
 <body>
-
 <div class="app">
   <header class="masthead">
     <span class="eyebrow"><span class="dot" id="liveDot"></span>Object detection &amp; tracking</span>
     <h1>Live detection</h1>
-    <p>Runs entirely in this browser tab — TensorFlow.js coco-ssd for detection, a custom IoU tracker for the persistent IDs. No server, no upload of your video anywhere.</p>
+    <p>TensorFlow.js coco-ssd detection · IoU-based tracker for persistent IDs · motion arrows · class filter. Runs entirely in this tab.</p>
   </header>
 
   <div class="viewfinder">
@@ -231,143 +154,354 @@
     <button class="btn" id="uploadBtn" disabled>Upload video</button>
     <input type="file" id="fileInput" accept="video/*">
     <button class="btn" id="stopBtn" disabled>Stop</button>
+    <button class="btn" id="arrowToggle" disabled title="Toggle motion arrows">Arrows ON</button>
     <div class="stats">
       <span>objects: <strong id="statObjects">0</strong></span>
       <span>fps: <strong id="statFps">0</strong></span>
     </div>
   </div>
 
-  <p class="footnote">Webcam access needs a secure context (HTTPS, or localhost) — it won't work opened directly as a local file in most browsers. Video upload works anywhere, no permissions needed.</p>
+  <!-- Class filter panel -->
+  <div class="filter-panel" id="filterPanel" style="display:none;">
+    <div class="filter-header" id="filterHeader">
+      <span class="filter-title">Filter objects <span id="filterCount"></span></span>
+      <span class="filter-chevron">▼</span>
+    </div>
+    <div class="filter-body" id="filterBody">
+      <div class="filter-tools">
+        <input class="filter-search" id="classSearch" type="text" placeholder="Search class…">
+        <button class="filter-quickbtn" id="selectAll">All</button>
+        <button class="filter-quickbtn" id="selectNone">None</button>
+        <button class="filter-quickbtn" id="selectCommon">Common</button>
+      </div>
+      <div class="class-grid" id="classGrid"></div>
+    </div>
+  </div>
+
+  <p class="footnote">
+    Webcam needs HTTPS or localhost (works on GitHub Pages). Video upload works from any local file.<br>
+    Arrows show movement direction — they appear once an object has moved at least a few pixels.
+  </p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 <script>
-/* ---------- IoU-based multi-object tracker ----------
-   A lightweight, from-scratch take on SORT's core idea: match each new
-   detection to the closest existing track by bounding-box overlap (IoU),
-   keep that track's ID, age out tracks that go unmatched too long, and
-   spin up a new ID for anything that doesn't match an existing track. */
-function iou(boxA, boxB){
-  const [ax, ay, aw, ah] = boxA;
-  const [bx, by, bw, bh] = boxB;
-  const x1 = Math.max(ax, bx);
-  const y1 = Math.max(ay, by);
-  const x2 = Math.min(ax + aw, bx + bw);
-  const y2 = Math.min(ay + ah, by + bh);
-  const interW = Math.max(0, x2 - x1);
-  const interH = Math.max(0, y2 - y1);
-  const interArea = interW * interH;
-  const unionArea = aw * ah + bw * bh - interArea;
-  return unionArea <= 0 ? 0 : interArea / unionArea;
+/* ─── IoU-based multi-object tracker ─────────────────────────────────────── */
+function iou(a, b){
+  const [ax,ay,aw,ah] = a, [bx,by,bw,bh] = b;
+  const x1=Math.max(ax,bx), y1=Math.max(ay,by);
+  const x2=Math.min(ax+aw,bx+bw), y2=Math.min(ay+ah,by+bh);
+  const iw=Math.max(0,x2-x1), ih=Math.max(0,y2-y1);
+  const inter=iw*ih, union=aw*ah+bw*bh-inter;
+  return union<=0 ? 0 : inter/union;
 }
 
 class CentroidIouTracker{
-  constructor({ iouThreshold = 0.3, maxMissed = 15 } = {}){
-    this.tracks = [];
-    this.nextId = 1;
-    this.iouThreshold = iouThreshold;
-    this.maxMissed = maxMissed;
+  constructor({ iouThreshold=0.3, maxMissed=15 }={}){
+    this.tracks=[]; this.nextId=1;
+    this.iouThreshold=iouThreshold; this.maxMissed=maxMissed;
   }
-
   update(detections){
-    const matchedTrackIdx = new Set();
-    const matchedDetIdx = new Set();
-
-    const pairs = [];
-    this.tracks.forEach((track, ti) => {
-      detections.forEach((det, di) => {
-        if (track.class === det.class){
-          const score = iou(track.bbox, det.bbox);
-          if (score > this.iouThreshold) pairs.push({ ti, di, score });
+    const mti=new Set(), mdi=new Set(), pairs=[];
+    this.tracks.forEach((tr,ti)=>
+      detections.forEach((d,di)=>{
+        if(tr.class===d.class){
+          const s=iou(tr.bbox,d.bbox);
+          if(s>this.iouThreshold) pairs.push({ti,di,s});
         }
-      });
-    });
-    pairs.sort((a, b) => b.score - a.score);
-
-    pairs.forEach(p => {
-      if (!matchedTrackIdx.has(p.ti) && !matchedDetIdx.has(p.di)){
-        matchedTrackIdx.add(p.ti);
-        matchedDetIdx.add(p.di);
-        const track = this.tracks[p.ti];
-        const det = detections[p.di];
-        track.bbox = det.bbox;
-        track.score = det.score;
-        track.missed = 0;
+      })
+    );
+    pairs.sort((a,b)=>b.s-a.s);
+    pairs.forEach(p=>{
+      if(!mti.has(p.ti)&&!mdi.has(p.di)){
+        mti.add(p.ti); mdi.add(p.di);
+        const tr=this.tracks[p.ti], d=detections[p.di];
+        tr.bbox=d.bbox; tr.score=d.score; tr.missed=0;
       }
     });
-
-    this.tracks.forEach((track, ti) => {
-      if (!matchedTrackIdx.has(ti)) track.missed++;
+    this.tracks.forEach((tr,ti)=>{ if(!mti.has(ti)) tr.missed++; });
+    this.tracks=this.tracks.filter(t=>t.missed<=this.maxMissed);
+    detections.forEach((d,di)=>{
+      if(!mdi.has(di))
+        this.tracks.push({id:this.nextId++,bbox:d.bbox,class:d.class,score:d.score,missed:0});
     });
-
-    this.tracks = this.tracks.filter(t => t.missed <= this.maxMissed);
-
-    detections.forEach((det, di) => {
-      if (!matchedDetIdx.has(di)){
-        this.tracks.push({ id: this.nextId++, bbox: det.bbox, class: det.class, score: det.score, missed: 0 });
-      }
-    });
-
-    return this.tracks.filter(t => t.missed === 0);
+    return this.tracks.filter(t=>t.missed===0);
   }
 }
 
-/* ---------- Wiring ---------- */
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const statusOverlay = document.getElementById('statusOverlay');
-const statusText = document.getElementById('statusText');
-const webcamBtn = document.getElementById('webcamBtn');
-const uploadBtn = document.getElementById('uploadBtn');
-const fileInput = document.getElementById('fileInput');
-const stopBtn = document.getElementById('stopBtn');
-const liveDot = document.getElementById('liveDot');
-const statObjects = document.getElementById('statObjects');
-const statFps = document.getElementById('statFps');
+/* ─── All 80 COCO classes ─────────────────────────────────────────────────── */
+const COCO_CLASSES = [
+  'person','bicycle','car','motorcycle','airplane','bus','train','truck','boat',
+  'traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat',
+  'dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack',
+  'umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball',
+  'kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket',
+  'bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple',
+  'sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake',
+  'chair','couch','potted plant','bed','dining table','toilet','tv','laptop',
+  'mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink',
+  'refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'
+];
+const COMMON_CLASSES = new Set(['person','car','bicycle','motorcycle','bus','truck',
+  'cat','dog','bottle','cup','cell phone','laptop','chair','couch','tv']);
 
-const SCORE_THRESHOLD = 0.5;
-const PALETTE = ['#6FE3D0', '#E8836A', '#E0C25E', '#A78BE8', '#7AC9E8', '#E89BC4'];
+/* ─── DOM refs ────────────────────────────────────────────────────────────── */
+const video        = document.getElementById('video');
+const canvas       = document.getElementById('canvas');
+const ctx          = canvas.getContext('2d');
+const statusOverlay= document.getElementById('statusOverlay');
+const statusText   = document.getElementById('statusText');
+const webcamBtn    = document.getElementById('webcamBtn');
+const uploadBtn    = document.getElementById('uploadBtn');
+const fileInput    = document.getElementById('fileInput');
+const stopBtn      = document.getElementById('stopBtn');
+const arrowToggle  = document.getElementById('arrowToggle');
+const liveDot      = document.getElementById('liveDot');
+const statObjects  = document.getElementById('statObjects');
+const statFps      = document.getElementById('statFps');
+const filterPanel  = document.getElementById('filterPanel');
+const filterHeader = document.getElementById('filterHeader');
+const filterBody   = document.getElementById('filterBody');
+const filterCount  = document.getElementById('filterCount');
+const classGrid    = document.getElementById('classGrid');
+const classSearch  = document.getElementById('classSearch');
+
+/* ─── State ───────────────────────────────────────────────────────────────── */
+const SCORE_THRESHOLD = 0.45;
+const PALETTE = ['#6FE3D0','#E8836A','#E0C25E','#A78BE8','#7AC9E8','#E89BC4','#8BE8A4','#E8CF8B'];
+const HISTORY_LEN = 10;
+const MIN_SPEED_PX = 1.8;      // px/frame smoothed — below this, no arrow drawn
+const ARROW_SPEED_SCALE = 14;  // how long the arrow gets per px/frame of speed
+const MAX_ARROW_LEN = 90;      // max pixel length of a motion arrow
 
 let model = null;
 let tracker = new CentroidIouTracker();
 let running = false;
-let frameCount = 0;
-let lastFpsTime = performance.now();
+let showArrows = true;
+let frameCount = 0, lastFpsTime = performance.now();
 
+// track position history: Map<trackId, [{x,y}]>
+const trackHistory = new Map();
+
+// selected classes: Set of class name strings, all selected by default
+const selectedClasses = new Set(COCO_CLASSES);
+
+/* ─── Class filter UI ─────────────────────────────────────────────────────── */
+function buildClassChips(){
+  COCO_CLASSES.forEach(cls => {
+    const chip = document.createElement('button');
+    chip.className = 'class-chip visible selected';
+    chip.textContent = cls;
+    chip.dataset.cls = cls;
+    chip.addEventListener('click', () => {
+      if(selectedClasses.has(cls)){
+        selectedClasses.delete(cls);
+        chip.classList.remove('selected');
+      } else {
+        selectedClasses.add(cls);
+        chip.classList.add('selected');
+      }
+      updateFilterCount();
+    });
+    classGrid.appendChild(chip);
+  });
+  updateFilterCount();
+}
+
+function updateFilterCount(){
+  filterCount.textContent = `${selectedClasses.size} / ${COCO_CLASSES.length}`;
+}
+
+filterHeader.addEventListener('click', () => {
+  const open = filterBody.classList.toggle('is-open');
+  filterHeader.classList.toggle('is-open', open);
+});
+
+document.getElementById('selectAll').addEventListener('click', () => {
+  COCO_CLASSES.forEach(c => selectedClasses.add(c));
+  document.querySelectorAll('.class-chip').forEach(c => c.classList.add('selected'));
+  updateFilterCount();
+});
+
+document.getElementById('selectNone').addEventListener('click', () => {
+  selectedClasses.clear();
+  document.querySelectorAll('.class-chip').forEach(c => c.classList.remove('selected'));
+  updateFilterCount();
+});
+
+document.getElementById('selectCommon').addEventListener('click', () => {
+  selectedClasses.clear();
+  document.querySelectorAll('.class-chip').forEach(c => {
+    const cls = c.dataset.cls;
+    if(COMMON_CLASSES.has(cls)){
+      selectedClasses.add(cls);
+      c.classList.add('selected');
+    } else {
+      c.classList.remove('selected');
+    }
+  });
+  updateFilterCount();
+});
+
+classSearch.addEventListener('input', () => {
+  const q = classSearch.value.toLowerCase().trim();
+  document.querySelectorAll('.class-chip').forEach(c => {
+    const matches = q === '' || c.dataset.cls.includes(q);
+    c.classList.toggle('visible', matches);
+  });
+});
+
+/* ─── Arrow drawing helpers ───────────────────────────────────────────────── */
+function drawArrow(fromX, fromY, toX, toY, color, lw){
+  const dx = toX-fromX, dy = toY-fromY;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  if(len < 4) return;
+  const headLen = Math.max(10, lw * 3.5);
+  const angle = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = lw;
+  ctx.lineCap     = 'round';
+  ctx.globalAlpha = 0.9;
+
+  // shaft (stop a bit before tip so head doesn't overlap)
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX - headLen * 0.65 * Math.cos(angle),
+             toY - headLen * 0.65 * Math.sin(angle));
+  ctx.stroke();
+
+  // arrowhead
+  ctx.beginPath();
+  ctx.moveTo(toX, toY);
+  ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI/6),
+             toY - headLen * Math.sin(angle - Math.PI/6));
+  ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI/6),
+             toY - headLen * Math.sin(angle + Math.PI/6));
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function updateHistory(id, cx, cy){
+  if(!trackHistory.has(id)) trackHistory.set(id, []);
+  const h = trackHistory.get(id);
+  h.push({x:cx, y:cy});
+  if(h.length > HISTORY_LEN) h.shift();
+}
+
+function getSmoothedVelocity(id){
+  const h = trackHistory.get(id);
+  if(!h || h.length < 3) return {dx:0, dy:0, speed:0};
+  const back = Math.min(4, h.length - 1);
+  const from = h[h.length - 1 - back];
+  const to   = h[h.length - 1];
+  const dx = (to.x - from.x) / back;
+  const dy = (to.y - from.y) / back;
+  return { dx, dy, speed: Math.sqrt(dx*dx + dy*dy) };
+}
+
+/* ─── Main draw ───────────────────────────────────────────────────────────── */
+function draw(tracks){
+  // clear + draw video frame
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const lw = Math.max(1.5, canvas.width / 380);
+  const fontSize = Math.max(11, Math.round(canvas.width / 72));
+  ctx.font = `600 ${fontSize}px 'JetBrains Mono', monospace`;
+
+  tracks.forEach(t => {
+    const [x, y, w, h] = t.bbox;
+    const cx = x + w/2, cy = y + h/2;
+    const color = PALETTE[t.id % PALETTE.length];
+
+    // update position history
+    updateHistory(t.id, cx, cy);
+
+    // bounding box
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
+    ctx.strokeRect(x, y, w, h);
+
+    // label tag
+    const label = `#${t.id} ${t.class} ${Math.round(t.score * 100)}%`;
+    const textW  = ctx.measureText(label).width;
+    const tagH   = fontSize + 10;
+    const tagY   = Math.max(0, y - tagH);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, tagY, textW + 14, tagH);
+    ctx.fillStyle = '#0B0E11';
+    ctx.fillText(label, x + 7, tagY + tagH - 5);
+
+    // pointer arrow: from label bottom-center → top-center of bbox
+    // only draw if tag is above the box (tagY < y means it's above)
+    if(tagY < y){
+      const arrowFrom = { x: x + (textW+14)/2, y: tagY + tagH };
+      const arrowTo   = { x: cx, y: y };
+      drawArrow(arrowFrom.x, arrowFrom.y, arrowTo.x, arrowTo.y, color, lw * 0.8);
+    }
+
+    // motion arrow: from center pointing in direction of movement
+    if(showArrows){
+      const {dx, dy, speed} = getSmoothedVelocity(t.id);
+      if(speed >= MIN_SPEED_PX){
+        const angle  = Math.atan2(dy, dx);
+        const arrLen = Math.min(speed * ARROW_SPEED_SCALE, MAX_ARROW_LEN, Math.max(w, h) * 0.85);
+        drawArrow(
+          cx, cy,
+          cx + Math.cos(angle) * arrLen,
+          cy + Math.sin(angle) * arrLen,
+          color, lw * 1.4
+        );
+      }
+    }
+  });
+}
+
+/* ─── Source management ───────────────────────────────────────────────────── */
 function setStatus(text, isError){
   statusText.textContent = text;
   statusText.classList.toggle('is-error', !!isError);
   statusOverlay.classList.remove('is-hidden');
 }
-
-function hideStatus(){
-  statusOverlay.classList.add('is-hidden');
-}
+function hideStatus(){ statusOverlay.classList.add('is-hidden'); }
 
 function stopCurrentSource(){
   running = false;
   liveDot.classList.remove('is-live');
-  if (video.srcObject){
-    video.srcObject.getTracks().forEach(t => t.stop());
+  if(video.srcObject){
+    video.srcObject.getTracks().forEach(t=>t.stop());
     video.srcObject = null;
   }
   video.removeAttribute('src');
   video.load();
   stopBtn.disabled = true;
+  // clean up stale history
+  trackHistory.clear();
 }
 
 function onSourceReady(){
-  video.addEventListener('loadedmetadata', () => {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-  }, { once: true });
   tracker = new CentroidIouTracker();
+  trackHistory.clear();
   running = true;
   liveDot.classList.add('is-live');
   stopBtn.disabled = false;
   hideStatus();
+
+  // set canvas size once metadata arrives (or immediately if already available)
+  const setSize = () => {
+    if(video.videoWidth > 0){
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+  };
+  if(video.readyState >= 1) setSize();
+  else video.addEventListener('loadedmetadata', setSize, {once:true});
+
   detectLoop();
 }
 
@@ -375,86 +509,76 @@ async function startWebcam(){
   stopCurrentSource();
   setStatus('Requesting camera access…');
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    // Use basic {video:true} first — most compatible across desktop and mobile.
+    // Avoid facingMode:'environment' as the strict constraint fails on many laptops.
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     video.srcObject = stream;
     await video.play();
     onSourceReady();
-  }catch(err){
-    setStatus(`Camera access failed (${err.message}). Try "Upload video" instead, or serve this page over HTTPS / localhost.`, true);
+  } catch(err){
+    const secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if(!secure){
+      setStatus('Camera needs HTTPS or localhost. Open via GitHub Pages or a local server — or use "Upload video" instead.', true);
+    } else {
+      setStatus(`Camera access denied: ${err.message}. Allow camera in browser settings and try again.`, true);
+    }
   }
 }
 
 function startFileSource(file){
   stopCurrentSource();
-  const url = URL.createObjectURL(file);
-  video.src = url;
+  video.src = URL.createObjectURL(file);
   video.loop = true;
   video.play();
   onSourceReady();
 }
 
-function draw(tracks){
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  tracks.forEach(t => {
-    const [x, y, w, h] = t.bbox;
-    const color = PALETTE[t.id % PALETTE.length];
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(2, canvas.width / 320);
-    ctx.strokeRect(x, y, w, h);
-
-    const label = `#${t.id} ${t.class} ${Math.round(t.score * 100)}%`;
-    const fontSize = Math.max(12, Math.round(canvas.width / 70));
-    ctx.font = `600 ${fontSize}px 'JetBrains Mono', monospace`;
-    const textW = ctx.measureText(label).width;
-    const tagH = fontSize + 8;
-
-    ctx.fillStyle = color;
-    ctx.fillRect(x, Math.max(0, y - tagH), textW + 12, tagH);
-    ctx.fillStyle = '#0B0E11';
-    ctx.fillText(label, x + 6, Math.max(fontSize, y - 6));
-  });
-}
-
+/* ─── Detection loop ──────────────────────────────────────────────────────── */
 async function detectLoop(){
-  if (!running || video.paused || video.ended) return;
+  if(!running || video.paused || video.ended) return;
   try{
-    const detections = await model.detect(video);
-    const filtered = detections.filter(d => d.score >= SCORE_THRESHOLD);
-    const tracked = tracker.update(filtered.map(d => ({ bbox: d.bbox, class: d.class, score: d.score })));
+    const dets = await model.detect(video);
+    const filtered = dets.filter(d =>
+      d.score >= SCORE_THRESHOLD && selectedClasses.has(d.class)
+    );
+    const tracked = tracker.update(filtered.map(d=>({bbox:d.bbox, class:d.class, score:d.score})));
     draw(tracked);
-
     statObjects.textContent = tracked.length;
     frameCount++;
     const now = performance.now();
-    if (now - lastFpsTime > 1000){
+    if(now - lastFpsTime > 1000){
       statFps.textContent = frameCount;
-      frameCount = 0;
-      lastFpsTime = now;
+      frameCount = 0; lastFpsTime = now;
     }
-  }catch(err){
-    // a transient frame error (e.g. video not ready yet) shouldn't kill the loop
-  }
-  if (running) requestAnimationFrame(detectLoop);
+  } catch(_){}
+  if(running) requestAnimationFrame(detectLoop);
 }
 
+/* ─── Button wiring ───────────────────────────────────────────────────────── */
 webcamBtn.addEventListener('click', startWebcam);
 uploadBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => {
-  if (fileInput.files[0]) startFileSource(fileInput.files[0]);
-});
+fileInput.addEventListener('change', () => { if(fileInput.files[0]) startFileSource(fileInput.files[0]); });
 stopBtn.addEventListener('click', () => {
   stopCurrentSource();
   setStatus('Stopped. Choose a source to start again.');
 });
+arrowToggle.addEventListener('click', () => {
+  showArrows = !showArrows;
+  arrowToggle.textContent = showArrows ? 'Arrows ON' : 'Arrows OFF';
+  arrowToggle.classList.toggle('btn--active', showArrows);
+});
 
+/* ─── Init ────────────────────────────────────────────────────────────────── */
 (async function init(){
   try{
     model = await cocoSsd.load();
     webcamBtn.disabled = false;
     uploadBtn.disabled = false;
-    setStatus('Model loaded. Choose a video source to begin.');
-  }catch(err){
+    arrowToggle.disabled = false;
+    filterPanel.style.display = '';
+    buildClassChips();
+    setStatus('Model loaded ✓  — Use webcam or upload a video to start.');
+  } catch(err){
     setStatus('Could not load the detection model. Check your internet connection and reload.', true);
   }
 })();
